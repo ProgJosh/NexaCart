@@ -3,13 +3,17 @@ import test from 'node:test';
 
 import {
   addCartItem,
+  buildStoreHash,
   calculateTotals,
   currency,
   filterCatalog,
   productStatus,
+  parseStoreHash,
   resolveMockRole,
+  restorePersistedStore,
   sanitizeText,
   setOrderStatus,
+  toggleSavedProduct,
   validateAddress,
   validateStock,
 } from '../lib/ecommerce-service.ts';
@@ -36,6 +40,12 @@ void test('catalog browsing searches, filters, sorts, and hides archived product
     filterCatalog(initialProducts, { search: 'tech pouch' }).length,
     0,
   );
+  assert.deepEqual(
+    filterCatalog(initialProducts, { search: 'noise cancellation' }).map(
+      (product) => product.id,
+    ),
+    ['P-1001'],
+  );
 });
 
 void test('product details include a gallery, variants, and review content', () => {
@@ -56,6 +66,35 @@ void test('cart combines matching variants and rejects insufficient stock', () =
     () => addCartItem(twice, product, product.stock, { Color: 'Forest' }),
     /Only 18/,
   );
+  assert.throws(() => addCartItem([], initialProducts[11], 1), /unavailable/);
+});
+
+void test('navigation hashes preserve storefront and product destinations', () => {
+  assert.equal(buildStoreHash('catalog'), '#catalog');
+  assert.equal(buildStoreHash('product', 'P-1004'), '#product/P-1004');
+  assert.deepEqual(parseStoreHash('#product/P-1004'), {
+    view: 'product',
+    productId: 'P-1004',
+  });
+  assert.deepEqual(parseStoreHash('#not-a-route'), { view: 'home' });
+});
+
+void test('persisted cart and wishlist data restore safely', () => {
+  const seed = {
+    cart: [] as Array<{ productId: string; quantity: number }>,
+    wishlist: [] as string[],
+  };
+  const restored = restorePersistedStore(
+    seed,
+    JSON.stringify({
+      cart: [{ productId: 'P-1001', quantity: 2 }],
+      wishlist: ['P-1003'],
+    }),
+    null,
+  );
+  assert.equal(restored.cart[0].quantity, 2);
+  assert.deepEqual(toggleSavedProduct(restored.wishlist, 'P-1003'), []);
+  assert.deepEqual(toggleSavedProduct([], 'P-1004'), ['P-1004']);
 });
 
 void test('checkout totals apply promotions and enforce cart stock', () => {

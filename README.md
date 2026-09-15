@@ -4,13 +4,16 @@ A complete responsive Philippine marketplace storefront and commerce administrat
 
 ## Included experiences
 
-- NexaCart marketplace home, responsive global/catalog search, hash-based navigation, category/deal shortcuts, catalog filtering/sorting/pagination, product galleries, variants, reviews, wishlist, and persistent cart
+- NexaCart marketplace home, responsive global/catalog search, URL-aware navigation, category/deal shortcuts, catalog filtering/sorting/pagination, product galleries, variants, reviews, recently viewed items, wishlist, and persistent cart
 - Validated three-step checkout, promotion codes, stock protection, mock card processing, confirmation, customer profile, and order history
 - Mock registration and sign-in with customer/admin roles
 - Admin overview, sales charts, product archive/restore, category and brand management, stock controls, order status updates, customer controls, promotions, reports, CSV export, and low-stock alerts
 - Loading, empty, success, error, out-of-stock, and destructive-action confirmation states
+- Original transparent NexaCart marketplace icon in 32×32, 192×192, and 512×512 sizes, plus installable web-app metadata and branded social preview
 
-All app data runs locally in mock mode and is saved in browser `localStorage` under `nexacart-commerce-v2`. Existing data from `everlane-commerce-v1` is migrated automatically on first load, so carts, wishlists, orders, and admin changes are preserved. No real payment or personal data is transmitted.
+Everything you need, one smart cart.
+
+All app data runs locally in mock mode and is saved in browser `localStorage` under `nexacart-commerce-v2`. Existing version-one data is migrated automatically on first load, so carts, wishlists, orders, and admin changes are preserved. No real payment or personal data is transmitted.
 
 Prices are displayed in Philippine pesos using the shared formatter in `lib/ecommerce-service.ts`. The seeded mock dataset retains its original base values and converts them consistently at a fixed demo rate of ₱58 per base unit, including checkout totals and dashboard reports.
 
@@ -45,7 +48,7 @@ npx tsc --noEmit
 npm run build
 ```
 
-`npm test` covers catalog browsing, product details, cart rules, checkout validation/totals, mock login roles, order status management, and inventory/admin behavior.
+`npm test` covers catalog browsing and keyword search, navigation hashes, product details, persisted cart/wishlist data, archived and low-stock cart rules, checkout validation/totals, PHP formatting, mock login roles, order status management, and inventory/admin behavior.
 
 ## Production deployment
 

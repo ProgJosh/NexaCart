@@ -9,7 +9,6 @@ import type {
 } from '../types/ecommerce';
 
 export const STORE_KEY = 'nexacart-commerce-v2';
-export const LEGACY_STORE_KEY = 'everlane-commerce-v1';
 export const PHP_RATE = 58;
 
 export const currency = (amount: number) =>
@@ -18,6 +17,66 @@ export const currency = (amount: number) =>
     currency: 'PHP',
     maximumFractionDigits: 0,
   }).format(amount * PHP_RATE);
+
+export type StoreRoute =
+  | 'home'
+  | 'catalog'
+  | 'product'
+  | 'wishlist'
+  | 'checkout'
+  | 'confirmation'
+  | 'login'
+  | 'profile'
+  | 'orders'
+  | 'admin';
+
+const validStoreRoutes: StoreRoute[] = [
+  'home',
+  'catalog',
+  'wishlist',
+  'checkout',
+  'confirmation',
+  'login',
+  'profile',
+  'orders',
+  'admin',
+];
+
+export const parseStoreHash = (
+  hash: string,
+): { view: StoreRoute; productId?: string } => {
+  const route = hash.replace(/^#\/?/, '');
+  if (route.startsWith('product/') && route.slice('product/'.length)) {
+    return { view: 'product', productId: route.slice('product/'.length) };
+  }
+  return {
+    view: validStoreRoutes.includes(route as StoreRoute)
+      ? (route as StoreRoute)
+      : 'home',
+  };
+};
+
+export const buildStoreHash = (view: StoreRoute, productId?: string) =>
+  view === 'product' && productId ? `#product/${productId}` : `#${view}`;
+
+export const toggleSavedProduct = (wishlist: string[], productId: string) =>
+  wishlist.includes(productId)
+    ? wishlist.filter((id) => id !== productId)
+    : [...wishlist, productId];
+
+export const restorePersistedStore = <T extends object>(
+  seed: T,
+  currentValue: string | null,
+  legacyValue: string | null,
+): T => {
+  const raw = currentValue ?? legacyValue;
+  if (!raw) return seed;
+  const parsed = JSON.parse(raw) as unknown;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('Invalid persisted store.');
+  }
+  return { ...seed, ...parsed };
+};
 
 export const productStatus = (product: Product) => {
   if (product.archived) return 'Archived' as const;
@@ -39,7 +98,7 @@ export const filterCatalog = (products: Product[], filters: CatalogFilters) => {
   const result = products.filter((product) => {
     const matchesSearch =
       !query ||
-      `${product.name} ${product.brand} ${product.category}`
+      `${product.name} ${product.brand} ${product.category} ${product.description} ${product.details.join(' ')} ${product.variants.flatMap((variant) => variant.values).join(' ')}`
         .toLowerCase()
         .includes(query);
     const matchesCategory =
@@ -99,9 +158,7 @@ export const addCartItem = (
 };
 
 export const resolveMockRole = (email: string) =>
-  ['admin@nexacart.test', 'admin@everlane.test'].includes(
-    email.trim().toLowerCase(),
-  )
+  email.trim().toLowerCase() === 'admin@nexacart.test'
     ? ('admin' as const)
     : ('customer' as const);
 

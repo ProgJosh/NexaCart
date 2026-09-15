@@ -104,18 +104,21 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import {
   addCartItem,
+  buildStoreHash,
   calculateTotals,
   currency,
   filterCatalog,
   generateEntityId,
   generateOrderId,
   productStatus,
+  parseStoreHash,
   resolveMockRole,
+  restorePersistedStore,
   sanitizeText,
   setOrderStatus,
-  LEGACY_STORE_KEY,
   PHP_RATE,
   STORE_KEY,
+  toggleSavedProduct,
   validateAddress,
   validateStock,
   wait,
@@ -184,6 +187,7 @@ const defaultCatalogRequest: CatalogRequest = {
 const seedStore: PersistedStore = {
   cart: [],
   wishlist: [],
+  recentlyViewed: [],
   orders: initialOrders,
   products: initialProducts,
   promotions: initialPromotions,
@@ -307,11 +311,15 @@ function ProductCard({
           </Badge>
           <span className="text-muted-foreground">Metro Manila</span>
         </div>
-        {status === 'Low stock' && (
-          <p className="mt-2 text-xs font-semibold text-amber-700">
-            Only {product.stock} left
-          </p>
-        )}
+        <p
+          className={`mt-2 text-xs font-semibold ${product.stock === 0 ? 'text-red-700' : status === 'Low stock' ? 'text-amber-700' : 'text-emerald-700'}`}
+        >
+          {product.stock === 0
+            ? 'Out of stock'
+            : status === 'Low stock'
+              ? `Only ${product.stock} left`
+              : 'In stock'}
+        </p>
         <Button
           className="mt-auto h-9 w-full rounded-lg"
           disabled={product.stock === 0}
@@ -351,13 +359,16 @@ export function EcommerceApp() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       try {
-        const saved =
-          window.localStorage.getItem(STORE_KEY) ??
-          window.localStorage.getItem(LEGACY_STORE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved) as Partial<PersistedStore>;
-          setStore({ ...seedStore, ...parsed });
-        }
+        const legacyKey = Object.keys(window.localStorage).find((key) =>
+          key.endsWith('-commerce-v1'),
+        );
+        setStore(
+          restorePersistedStore(
+            seedStore,
+            window.localStorage.getItem(STORE_KEY),
+            legacyKey ? window.localStorage.getItem(legacyKey) : null,
+          ),
+        );
       } catch {
         setNotice({
           type: 'error',
@@ -372,26 +383,9 @@ export function EcommerceApp() {
 
   useEffect(() => {
     const syncFromUrl = () => {
-      const route = window.location.hash.replace(/^#\/?/, '');
-      if (route.startsWith('product/')) {
-        setSelectedProductId(route.slice('product/'.length));
-        setView('product');
-        return;
-      }
-      const allowed: StoreView[] = [
-        'home',
-        'catalog',
-        'wishlist',
-        'checkout',
-        'confirmation',
-        'login',
-        'profile',
-        'orders',
-        'admin',
-      ];
-      setView(
-        allowed.includes(route as StoreView) ? (route as StoreView) : 'home',
-      );
+      const route = parseStoreHash(window.location.hash);
+      if (route.productId) setSelectedProductId(route.productId);
+      setView(route.view);
     };
     syncFromUrl();
     window.addEventListener('popstate', syncFromUrl);
@@ -415,11 +409,19 @@ export function EcommerceApp() {
     activeProducts[0];
 
   const navigate = (next: StoreView, productId?: string) => {
-    if (productId) setSelectedProductId(productId);
+    if (productId) {
+      setSelectedProductId(productId);
+      setStore((current) => ({
+        ...current,
+        recentlyViewed: [
+          productId,
+          ...(current.recentlyViewed ?? []).filter((id) => id !== productId),
+        ].slice(0, 8),
+      }));
+    }
     setView(next);
     setMobileOpen(false);
-    const hash =
-      next === 'product' && productId ? `#product/${productId}` : `#${next}`;
+    const hash = buildStoreHash(next, productId);
     if (window.location.hash !== hash) window.history.pushState(null, '', hash);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -442,6 +444,11 @@ export function EcommerceApp() {
     });
   };
 
+  const clearGlobalSearch = () => {
+    setGlobalSearch('');
+    if (view === 'catalog') openCatalog();
+  };
+
   const toast = (
     message: string,
     type: NonNullable<Notice>['type'] = 'success',
@@ -451,9 +458,7 @@ export function EcommerceApp() {
     const wished = store.wishlist.includes(productId);
     setStore((current) => ({
       ...current,
-      wishlist: wished
-        ? current.wishlist.filter((id) => id !== productId)
-        : [...current.wishlist, productId],
+      wishlist: toggleSavedProduct(current.wishlist, productId),
     }));
     toast(wished ? 'Removed from your wishlist.' : 'Saved to your wishlist.');
   };
@@ -532,11 +537,32 @@ export function EcommerceApp() {
             Nexa<span className="text-primary">Cart</span>
           </button>
           <nav
-            className="ml-8 hidden items-center gap-7 text-sm font-medium lg:flex"
+            className="ml-6 hidden items-center gap-4 text-sm font-medium lg:flex"
             aria-label="Main navigation"
           >
             <button
-              className="hover:text-primary"
+              aria-current={view === 'home' ? 'page' : undefined}
+              className={
+                view === 'home'
+                  ? 'font-semibold text-primary'
+                  : 'hover:text-primary'
+              }
+              onClick={() => navigate('home')}
+              type="button"
+            >
+              Home
+            </button>
+            <button
+              aria-current={
+                view === 'catalog' && catalogRequest.sort === 'newest'
+                  ? 'page'
+                  : undefined
+              }
+              className={
+                view === 'catalog' && catalogRequest.sort === 'newest'
+                  ? 'font-semibold text-primary'
+                  : 'hover:text-primary'
+              }
               onClick={() =>
                 openCatalog({ sort: 'newest', title: 'New arrivals' })
               }
@@ -545,21 +571,54 @@ export function EcommerceApp() {
               New arrivals
             </button>
             <button
-              className="hover:text-primary"
+              aria-current={
+                view === 'catalog' &&
+                catalogRequest.category === 'All' &&
+                !catalogRequest.saleOnly &&
+                catalogRequest.sort !== 'newest'
+                  ? 'page'
+                  : undefined
+              }
+              className={
+                view === 'catalog' &&
+                catalogRequest.category === 'All' &&
+                !catalogRequest.saleOnly &&
+                catalogRequest.sort !== 'newest'
+                  ? 'font-semibold text-primary'
+                  : 'hover:text-primary'
+              }
               onClick={() => openCatalog()}
               type="button"
             >
               Shop
             </button>
             <button
-              className="hover:text-primary"
-              onClick={() => navigate('wishlist')}
+              aria-current={
+                view === 'catalog' && catalogRequest.category !== 'All'
+                  ? 'page'
+                  : undefined
+              }
+              className={
+                view === 'catalog' && catalogRequest.category !== 'All'
+                  ? 'font-semibold text-primary'
+                  : 'hover:text-primary'
+              }
+              onClick={() => openCatalog({ title: 'Shop by category' })}
               type="button"
             >
-              Wishlist
+              Categories
             </button>
             <button
-              className="font-semibold text-destructive"
+              aria-current={
+                view === 'catalog' && catalogRequest.saleOnly
+                  ? 'page'
+                  : undefined
+              }
+              className={
+                view === 'catalog' && catalogRequest.saleOnly
+                  ? 'font-semibold text-destructive underline underline-offset-4'
+                  : 'font-semibold text-destructive'
+              }
               onClick={() =>
                 openCatalog({
                   saleOnly: true,
@@ -568,7 +627,19 @@ export function EcommerceApp() {
               }
               type="button"
             >
-              Sale
+              Deals
+            </button>
+            <button
+              aria-current={view === 'admin' ? 'page' : undefined}
+              className={
+                view === 'admin'
+                  ? 'font-semibold text-primary'
+                  : 'hover:text-primary'
+              }
+              onClick={() => navigate('admin')}
+              type="button"
+            >
+              Admin
             </button>
           </nav>
           <form
@@ -584,6 +655,16 @@ export function EcommerceApp() {
               placeholder="Search products, brands, categories..."
               value={globalSearch}
             />
+            {globalSearch && (
+              <button
+                aria-label="Clear search"
+                className="grid size-9 shrink-0 place-items-center text-muted-foreground hover:text-foreground"
+                onClick={clearGlobalSearch}
+                type="button"
+              >
+                <X className="size-4" />
+              </button>
+            )}
             <Button
               aria-label="Submit search"
               className="h-10 rounded-none px-4"
@@ -594,19 +675,35 @@ export function EcommerceApp() {
           </form>
           <div className="ml-auto flex items-center gap-1 md:ml-0">
             <Button
+              aria-label="Order history"
+              aria-current={view === 'orders' ? 'page' : undefined}
+              className="hidden sm:inline-flex"
+              onClick={() => navigate('orders')}
+              size="icon"
+              variant={view === 'orders' ? 'secondary' : 'ghost'}
+            >
+              <Package />
+            </Button>
+            <Button
               aria-label="Your account"
+              aria-current={
+                view === 'profile' || view === 'login' ? 'page' : undefined
+              }
               onClick={() => navigate(store.user ? 'profile' : 'login')}
               size="icon"
-              variant="ghost"
+              variant={
+                view === 'profile' || view === 'login' ? 'secondary' : 'ghost'
+              }
             >
               <UserRound />
             </Button>
             <Button
               aria-label="Wishlist"
+              aria-current={view === 'wishlist' ? 'page' : undefined}
               className="hidden sm:inline-flex"
               onClick={() => navigate('wishlist')}
               size="icon"
-              variant="ghost"
+              variant={view === 'wishlist' ? 'secondary' : 'ghost'}
             >
               <Heart />
             </Button>
@@ -641,6 +738,16 @@ export function EcommerceApp() {
             placeholder="Search NexaCart"
             value={globalSearch}
           />
+          {globalSearch && (
+            <button
+              aria-label="Clear search"
+              className="grid size-9 shrink-0 place-items-center text-muted-foreground hover:text-foreground"
+              onClick={clearGlobalSearch}
+              type="button"
+            >
+              <X className="size-4" />
+            </button>
+          )}
           <Button
             aria-label="Submit search"
             className="h-10 rounded-none px-4"
@@ -656,6 +763,10 @@ export function EcommerceApp() {
   const renderHome = () => {
     const featured = activeProducts
       .filter((product) => product.featured)
+      .slice(0, 4);
+    const recentlyViewed = (store.recentlyViewed ?? [])
+      .map((id) => activeProducts.find((product) => product.id === id))
+      .filter((product): product is Product => Boolean(product))
       .slice(0, 4);
     const categories = [
       { name: 'Audio', icon: Headphones, tone: 'bg-orange-50 text-orange-900' },
@@ -685,9 +796,9 @@ export function EcommerceApp() {
                 NexaCart Payday Picks · Up to 35% off
               </Badge>
               <h1 className="font-heading text-5xl font-bold leading-[.98] tracking-[-0.055em] sm:text-6xl lg:text-7xl">
-                Great finds.
+                Everything you need,
                 <br />
-                <span className="text-orange-300">Better every day.</span>
+                <span className="text-orange-300">one smart cart.</span>
               </h1>
               <p className="mt-6 max-w-lg text-base leading-7 text-white/85 sm:text-lg">
                 Trusted tech, home, travel, and wellness finds—easy to discover,
@@ -777,6 +888,39 @@ export function EcommerceApp() {
             ))}
           </div>
         </section>
+        {recentlyViewed.length > 0 && (
+          <section className="mx-auto max-w-[1440px] px-4 pb-20 sm:px-6 lg:px-10">
+            <div className="mb-7 flex items-end justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary">
+                  Pick up where you left off
+                </p>
+                <h2 className="mt-2 font-heading text-3xl font-semibold tracking-tight">
+                  Recently viewed
+                </h2>
+              </div>
+              <Button
+                className="rounded-xl"
+                onClick={() => openCatalog()}
+                variant="outline"
+              >
+                Keep exploring <ArrowRight />
+              </Button>
+            </div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-8 md:grid-cols-4 lg:gap-6">
+              {recentlyViewed.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  wished={store.wishlist.includes(product.id)}
+                  onAdd={() => addToCart(product)}
+                  onOpen={() => navigate('product', product.id)}
+                  onWishlist={() => toggleWishlist(product.id)}
+                />
+              ))}
+            </div>
+          </section>
+        )}
         <section className="mx-auto mb-24 grid max-w-[1360px] overflow-hidden rounded-3xl bg-orange-50 md:grid-cols-2">
           <div className="flex flex-col justify-center p-8 sm:p-12 lg:p-16">
             <Badge className="mb-5 w-fit bg-primary text-primary-foreground">
@@ -885,8 +1029,8 @@ export function EcommerceApp() {
             NexaCart
           </p>
           <p className="mt-4 max-w-sm text-sm leading-6 text-white/65">
-            Great finds for modern Filipino life, backed by secure checkout,
-            clear prices, and dependable delivery.
+            Everything you need, one smart cart. Shop with clear prices, secure
+            checkout, and dependable delivery.
           </p>
           <form
             className="mt-6 flex max-w-sm overflow-hidden rounded-xl bg-white/10 p-1"
@@ -1099,9 +1243,13 @@ export function EcommerceApp() {
         open={mobileOpen}
         setOpen={setMobileOpen}
         user={store.user}
-        navigate={(next) =>
-          next === 'catalog' ? openCatalog() : navigate(next)
-        }
+        currentView={view}
+        navigate={navigate}
+        openCatalog={openCatalog}
+        openCart={() => {
+          setMobileOpen(false);
+          setCartOpen(true);
+        }}
       />
       {notice && (
         <div
@@ -1198,12 +1346,18 @@ function MobileMenu({
   open,
   setOpen,
   user,
+  currentView,
   navigate,
+  openCatalog,
+  openCart,
 }: {
   open: boolean;
   setOpen: (open: boolean) => void;
   user: UserProfile | null;
+  currentView: StoreView;
   navigate: (view: StoreView) => void;
+  openCatalog: (request?: Partial<CatalogRequest>) => void;
+  openCart: () => void;
 }) {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -1221,21 +1375,70 @@ function MobileMenu({
         </SheetHeader>
         <nav className="flex flex-col p-3">
           {[
-            { label: 'Home', icon: Home, view: 'home' },
-            { label: 'Shop all', icon: Store, view: 'catalog' },
-            { label: 'Wishlist', icon: Heart, view: 'wishlist' },
-            { label: 'My orders', icon: Package, view: 'orders' },
+            {
+              label: 'Home',
+              icon: Home,
+              target: 'home' as StoreView,
+              action: () => navigate('home'),
+            },
+            {
+              label: 'Shop all',
+              icon: Store,
+              target: 'catalog' as StoreView,
+              action: () => openCatalog(),
+            },
+            {
+              label: 'Categories',
+              icon: Boxes,
+              target: 'catalog' as StoreView,
+              action: () => openCatalog({ title: 'Shop by category' }),
+            },
+            {
+              label: 'Deals',
+              icon: Tag,
+              target: 'catalog' as StoreView,
+              action: () =>
+                openCatalog({
+                  saleOnly: true,
+                  title: 'Deals worth checking out',
+                }),
+            },
+            {
+              label: 'Wishlist',
+              icon: Heart,
+              target: 'wishlist' as StoreView,
+              action: () => navigate('wishlist'),
+            },
+            {
+              label: 'Cart',
+              icon: ShoppingCart,
+              target: 'checkout' as StoreView,
+              action: openCart,
+            },
+            {
+              label: 'My orders',
+              icon: Package,
+              target: 'orders' as StoreView,
+              action: () => navigate('orders'),
+            },
             {
               label: 'Account',
               icon: UserRound,
-              view: user ? 'profile' : 'login',
+              target: (user ? 'profile' : 'login') as StoreView,
+              action: () => navigate(user ? 'profile' : 'login'),
             },
-            { label: 'Admin demo', icon: LayoutDashboard, view: 'admin' },
-          ].map(({ label, icon: Icon, view }) => (
+            {
+              label: 'Admin demo',
+              icon: LayoutDashboard,
+              target: 'admin' as StoreView,
+              action: () => navigate('admin'),
+            },
+          ].map(({ label, icon: Icon, target, action }) => (
             <button
-              className="flex items-center gap-3 rounded-xl px-3 py-3 text-left font-medium hover:bg-muted"
+              aria-current={currentView === target ? 'page' : undefined}
+              className={`flex items-center gap-3 rounded-xl px-3 py-3 text-left font-medium ${currentView === target ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
               key={label}
-              onClick={() => navigate(view as StoreView)}
+              onClick={action}
               type="button"
             >
               <Icon className="size-5" />
@@ -1487,6 +1690,19 @@ function CatalogView({
           placeholder="Search products..."
           value={search}
         />
+        {search && (
+          <button
+            aria-label="Clear catalog search"
+            className="grid size-9 shrink-0 place-items-center text-muted-foreground hover:text-foreground"
+            onClick={() => {
+              setSearch('');
+              setPage(1);
+            }}
+            type="button"
+          >
+            <X className="size-4" />
+          </button>
+        )}
       </div>
       <div className="mt-8 grid gap-9 lg:grid-cols-[230px_1fr]">
         <aside className="hidden lg:block">
@@ -1562,6 +1778,19 @@ function CatalogView({
                 placeholder="Search by product, brand, or category"
                 value={search}
               />
+              {search && (
+                <button
+                  aria-label="Clear catalog search"
+                  className="grid size-9 shrink-0 place-items-center text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    setSearch('');
+                    setPage(1);
+                  }}
+                  type="button"
+                >
+                  <X className="size-4" />
+                </button>
+              )}
             </div>
             <div className="flex gap-2 lg:hidden">
               <select

@@ -140,6 +140,7 @@ export interface CheckoutPayload {
 export interface PersistedStore {
   cart: CartItem[];
   wishlist: string[];
+  recentlyViewed: string[];
   orders: Order[];
   products: Product[];
   promotions: Promotion[];
