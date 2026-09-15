@@ -5,7 +5,11 @@ export type OrderStatus =
   | 'Delivered'
   | 'Cancelled';
 
-export type ProductStatus = 'Active' | 'Low stock' | 'Out of stock' | 'Archived';
+export type ProductStatus =
+  | 'Active'
+  | 'Low stock'
+  | 'Out of stock'
+  | 'Archived';
 
 export interface ProductVariant {
   name: string;

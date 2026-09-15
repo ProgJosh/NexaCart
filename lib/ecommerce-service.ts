@@ -8,10 +8,16 @@ import type {
   OrderStatus,
 } from '../types/ecommerce';
 
-export const STORE_KEY = 'everlane-commerce-v1';
+export const STORE_KEY = 'nexacart-commerce-v2';
+export const LEGACY_STORE_KEY = 'everlane-commerce-v1';
+export const PHP_RATE = 58;
 
 export const currency = (amount: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+  new Intl.NumberFormat('en-PH', {
+    style: 'currency',
+    currency: 'PHP',
+    maximumFractionDigits: 0,
+  }).format(amount * PHP_RATE);
 
 export const productStatus = (product: Product) => {
   if (product.archived) return 'Archived' as const;
@@ -31,17 +37,35 @@ export interface CatalogFilters {
 export const filterCatalog = (products: Product[], filters: CatalogFilters) => {
   const query = filters.search?.trim().toLowerCase() ?? '';
   const result = products.filter((product) => {
-    const matchesSearch = !query || `${product.name} ${product.brand} ${product.category}`.toLowerCase().includes(query);
-    const matchesCategory = !filters.category || filters.category === 'All' || product.category === filters.category;
+    const matchesSearch =
+      !query ||
+      `${product.name} ${product.brand} ${product.category}`
+        .toLowerCase()
+        .includes(query);
+    const matchesCategory =
+      !filters.category ||
+      filters.category === 'All' ||
+      product.category === filters.category;
     const price = filters.price ?? 'all';
-    const matchesPrice = price === 'all' || (price === 'under75' && product.price < 75) || (price === '75to125' && product.price >= 75 && product.price <= 125) || (price === 'over125' && product.price > 125);
-    return !product.archived && matchesSearch && matchesCategory && matchesPrice && (!filters.inStock || product.stock > 0);
+    const matchesPrice =
+      price === 'all' ||
+      (price === 'under75' && product.price < 75) ||
+      (price === '75to125' && product.price >= 75 && product.price <= 125) ||
+      (price === 'over125' && product.price > 125);
+    return (
+      !product.archived &&
+      matchesSearch &&
+      matchesCategory &&
+      matchesPrice &&
+      (!filters.inStock || product.stock > 0)
+    );
   });
   return [...result].sort((a, b) => {
     if (filters.sort === 'price-low') return a.price - b.price;
     if (filters.sort === 'price-high') return b.price - a.price;
     if (filters.sort === 'rating') return b.rating - a.rating;
-    if (filters.sort === 'newest') return b.createdAt.localeCompare(a.createdAt);
+    if (filters.sort === 'newest')
+      return b.createdAt.localeCompare(a.createdAt);
     return Number(b.featured) - Number(a.featured);
   });
 };
@@ -52,11 +76,15 @@ export const addCartItem = (
   quantity: number,
   variant: Record<string, string> = {},
 ) => {
-  if (quantity < 1 || !Number.isInteger(quantity)) throw new Error('Choose a valid quantity.');
-  if (product.archived || product.stock === 0) throw new Error('This item is currently unavailable.');
+  if (quantity < 1 || !Number.isInteger(quantity))
+    throw new Error('Choose a valid quantity.');
+  if (product.archived || product.stock === 0)
+    throw new Error('This item is currently unavailable.');
   const variantKey = JSON.stringify(variant);
   const index = cart.findIndex(
-    (item) => item.productId === product.id && JSON.stringify(item.variant ?? {}) === variantKey,
+    (item) =>
+      item.productId === product.id &&
+      JSON.stringify(item.variant ?? {}) === variantKey,
   );
   const currentQuantity = index >= 0 ? cart[index].quantity : 0;
   if (currentQuantity + quantity > product.stock) {
@@ -64,14 +92,24 @@ export const addCartItem = (
   }
   if (index < 0) return [...cart, { productId: product.id, quantity, variant }];
   return cart.map((item, itemIndex) =>
-    itemIndex === index ? { ...item, quantity: item.quantity + quantity } : item,
+    itemIndex === index
+      ? { ...item, quantity: item.quantity + quantity }
+      : item,
   );
 };
 
 export const resolveMockRole = (email: string) =>
-  email.trim().toLowerCase() === 'admin@everlane.test' ? 'admin' as const : 'customer' as const;
+  ['admin@nexacart.test', 'admin@everlane.test'].includes(
+    email.trim().toLowerCase(),
+  )
+    ? ('admin' as const)
+    : ('customer' as const);
 
-export const setOrderStatus = (orders: Order[], id: string, status: OrderStatus) =>
+export const setOrderStatus = (
+  orders: Order[],
+  id: string,
+  status: OrderStatus,
+) =>
   orders.map((order) =>
     order.id === id
       ? {
@@ -97,7 +135,9 @@ export const calculateTotals = (
     return sum + (product?.price ?? 0) * item.quantity;
   }, 0);
   const promotion = promotions.find(
-    (entry) => entry.active && entry.code.toLowerCase() === promoCode.trim().toLowerCase(),
+    (entry) =>
+      entry.active &&
+      entry.code.toLowerCase() === promoCode.trim().toLowerCase(),
   );
   const discount = promotion
     ? promotion.type === 'Percentage'
@@ -119,7 +159,8 @@ export const calculateTotals = (
 export const validateStock = (cart: CartItem[], products: Product[]) => {
   for (const item of cart) {
     const product = products.find((entry) => entry.id === item.productId);
-    if (!product || product.archived) return 'One of your items is no longer available.';
+    if (!product || product.archived)
+      return 'One of your items is no longer available.';
     if (item.quantity > product.stock) {
       return `${product.name} only has ${product.stock} item${product.stock === 1 ? '' : 's'} available.`;
     }
@@ -130,14 +171,21 @@ export const validateStock = (cart: CartItem[], products: Product[]) => {
 export const validateAddress = (address: Address) => {
   const errors: Partial<Record<keyof Address, string>> = {};
   const clean = (value: string) => value.trim();
-  if (clean(address.firstName).length < 2) errors.firstName = 'Enter your first name.';
-  if (clean(address.lastName).length < 2) errors.lastName = 'Enter your last name.';
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean(address.email))) errors.email = 'Enter a valid email.';
-  if (!/^[+\d][\d\s()-]{7,18}$/.test(clean(address.phone))) errors.phone = 'Enter a valid phone number.';
-  if (clean(address.address).length < 5) errors.address = 'Enter a complete street address.';
+  if (clean(address.firstName).length < 2)
+    errors.firstName = 'Enter your first name.';
+  if (clean(address.lastName).length < 2)
+    errors.lastName = 'Enter your last name.';
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean(address.email)))
+    errors.email = 'Enter a valid email.';
+  if (!/^[+\d][\d\s()-]{7,18}$/.test(clean(address.phone)))
+    errors.phone = 'Enter a valid phone number.';
+  if (clean(address.address).length < 5)
+    errors.address = 'Enter a complete street address.';
   if (clean(address.city).length < 2) errors.city = 'Enter a city.';
-  if (clean(address.state).length < 2) errors.state = 'Enter a state or region.';
-  if (clean(address.postalCode).length < 3) errors.postalCode = 'Enter a postal code.';
+  if (clean(address.state).length < 2)
+    errors.state = 'Enter a state or region.';
+  if (clean(address.postalCode).length < 3)
+    errors.postalCode = 'Enter a postal code.';
   if (clean(address.country).length < 2) errors.country = 'Enter a country.';
   return errors;
 };
@@ -145,7 +193,8 @@ export const validateAddress = (address: Address) => {
 export const sanitizeText = (value: string, maxLength = 120) =>
   value.replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, maxLength);
 
-export const generateOrderId = () => `EV-${Math.floor(10000 + Math.random() * 89999)}`;
+export const generateOrderId = () =>
+  `NX-${Math.floor(10000 + Math.random() * 89999)}`;
 
 export const generateEntityId = (prefix: string) =>
   `${prefix}-${Math.floor(100000 + Math.random() * 899999)}`;

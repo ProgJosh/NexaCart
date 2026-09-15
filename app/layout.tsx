@@ -13,21 +13,34 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://everlane-goods-shop.deep-auk-3336.chatgpt.site'),
-  title: 'Everlane — Thoughtful things for modern living',
+  metadataBase: new URL(
+    'https://nexacart-marketplace.veloemmanueljosh15.chatgpt.site',
+  ),
+  title: 'NexaCart — Great finds, better every day',
   description:
-    'Shop curated essentials for home, work, travel, and everyday living.',
+    'Shop trusted finds across electronics, home, work, travel, and wellness—all priced in Philippine pesos.',
+  icons: {
+    icon: '/nexacart-icon.png',
+    apple: '/nexacart-icon.png',
+  },
   openGraph: {
-    title: 'Everlane — Thoughtful things for modern living',
+    title: 'NexaCart — Great finds, better every day',
     description:
-      'Shop curated essentials for home, work, travel, and everyday living.',
-    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'Everlane — Thoughtful things, made for living.' }],
+      'Shop trusted finds across electronics, home, work, travel, and wellness—all priced in Philippine pesos.',
+    images: [
+      {
+        url: '/og.png',
+        width: 1200,
+        height: 630,
+        alt: 'NexaCart — Great finds. Better every day.',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Everlane — Thoughtful things for modern living',
+    title: 'NexaCart — Great finds, better every day',
     description:
-      'Shop curated essentials for home, work, travel, and everyday living.',
+      'Shop trusted finds across electronics, home, work, travel, and wellness—all priced in Philippine pesos.',
     images: ['/og.png'],
   },
 };
@@ -38,7 +51,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en-PH">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
