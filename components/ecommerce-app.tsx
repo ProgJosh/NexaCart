@@ -2838,7 +2838,7 @@ function AuthView({
     const user: UserProfile = {
       id: isAdmin ? 'A-001' : (existingCustomer?.id ?? generateEntityId('C')),
       name: isAdmin
-        ? 'Olivia Chen'
+        ? 'Emmanuel Josh Velo'
         : mode === 'register'
           ? name
           : (existingCustomer?.name ??
@@ -3379,7 +3379,7 @@ function AdminPanel({
   ];
   const titles: Record<AdminView, [string, string]> = {
     dashboard: [
-      'Good morning, Olivia',
+      'Good morning, Emmanuel Josh Velo',
       'Here’s what’s happening with your store today.',
     ],
     products: [
@@ -3427,10 +3427,10 @@ function AdminPanel({
         <div className="mt-auto rounded-2xl bg-white/8 p-4">
           <div className="flex items-center gap-3">
             <span className="grid size-9 place-items-center rounded-full bg-primary text-xs font-bold text-white">
-              OC
+              EV
             </span>
             <div>
-              <p className="text-sm font-semibold">Olivia Chen</p>
+              <p className="text-sm font-semibold">Emmanuel Josh Velo</p>
               <p className="text-xs text-white/50">Store administrator</p>
             </div>
           </div>
@@ -3462,7 +3462,7 @@ function AdminPanel({
                 data live
               </Badge>
               <span className="grid size-9 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                OC
+                EV
               </span>
             </div>
           </div>

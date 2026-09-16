@@ -237,9 +237,7 @@ export const initialProducts: Product[] = [
     rating: 4.7,
     reviewCount: 39,
     createdAt: '2026-04-21',
-    images: gallery(
-      'https://images.unsplash.com/photo-1583845112203-454c2254edb3?auto=format&fit=crop&w=1000&q=88',
-    ),
+    images: gallery('/bath-towel.png'),
     variants: [{ name: 'Color', values: ['Sage', 'Oat', 'Rust'] }],
   },
   {
